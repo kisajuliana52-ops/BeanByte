@@ -90,7 +90,10 @@
 
       {{-- 2. LUPA PASSWORD --}}
       <div id="v-lupa" hidden>
-        <form method="POST" action="{{ url('/lupa-password') }}">
+       <form method="POST" action="{{ url('/lupa-password') }}">
+    @csrf
+
+    <!-- Isi form yang sudah ada tetap di sini -->
           @csrf
           <h1>Lupa Password</h1>
           <p class="sub">Masukkan username atau email yang terdaftar. Kami akan mengirim petunjuk untuk mengatur ulang password kamu.</p>
