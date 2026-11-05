@@ -110,7 +110,21 @@
   .tabb.c-pending{background:#fdecc8;color:#b36b00}
   .tabb[class*="c-"].on{box-shadow:inset 0 0 0 2px currentColor}
     /* Tabel */
-  .tbw{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:12px}
+  .tbw {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.tb {
+    min-width: 700px;
+    width: 100%;
+    border-collapse: collapse;
+}
   .tb{width:100%;border-collapse:collapse;min-width:620px}
   .tb th{background:var(--head);text-align:left;font-weight:600;padding:13px 10px;font-size:.8rem;white-space:nowrap}
   .tb td{padding:10px;border-bottom:1px solid #f0e6da;font-size:.82rem;vertical-align:middle}
