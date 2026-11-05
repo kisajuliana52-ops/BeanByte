@@ -407,8 +407,25 @@ function navTo(k) {
 
 /* ===================== AKSI ===================== */
 function ubah(id, d) {
-  const q = Math.max(0, qtyOf(id) + d);
-  if (q) cart[id] = q; else delete cart[id];
+  const menu = byId(id);
+
+  if (!menu) return;
+
+  const jumlahBaru = qtyOf(id) + d;
+
+  if (jumlahBaru < 0) return;
+
+  if (jumlahBaru > menu.stok) {
+    toast('Jumlah melebihi stok yang tersedia!');
+    return;
+  }
+
+  if (jumlahBaru === 0) {
+    delete cart[id];
+  } else {
+    cart[id] = jumlahBaru;
+  }
+
   refresh();
 }
 function hapus(id) { delete cart[id]; refresh(); }
