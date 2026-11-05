@@ -1,6 +1,7 @@
 
 <?php
 
+use Illuminate\Database\ConnectionException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -31,15 +32,17 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
 
         $exceptions->report(function (Throwable $e) {
-            // Log error Laravel
+            // Error tetap dicatat oleh Laravel
         });
 
         $exceptions->render(function (Throwable $e, Request $request) {
 
+            // Penanganan khusus untuk API
             if (!$request->is('api/*')) {
                 return null;
             }
 
+            // Endpoint tidak ditemukan
             if ($e instanceof NotFoundHttpException) {
                 return response()->json([
                     'success' => false,
@@ -47,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
 
+            // Akses ditolak
             if ($e instanceof AccessDeniedHttpException) {
                 return response()->json([
                     'success' => false,
@@ -54,13 +58,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 403);
             }
 
-            if ($e instanceof QueryException) {
+            // Koneksi database bermasalah
+            if (
+                $e instanceof ConnectionException ||
+                $e instanceof QueryException
+            ) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Terjadi masalah saat memproses data database.',
-                ], 500);
+                    'message' => 'Database tidak dapat dihubungi. Pastikan MySQL XAMPP sudah berjalan.',
+                ], 503);
             }
 
+            // Penanganan HTTP error lainnya
             if ($e instanceof HttpExceptionInterface) {
                 $status = $e->getStatusCode();
 
