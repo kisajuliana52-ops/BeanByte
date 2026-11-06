@@ -1,7 +1,8 @@
-
-<?php
+ <?php
 
 use Illuminate\Support\Facades\Route;
+
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\KategoriMenuController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MejaController;
@@ -10,26 +11,73 @@ use App\Http\Controllers\PesananController;
 use App\Http\Controllers\DetailPesananController;
 use App\Http\Controllers\TransaksiController;
 use App\Http\Controllers\MetodePembayaranController;
+use App\Http\Controllers\AdminPenggunaController;
 
-// API umum
+
+/*
+|--------------------------------------------------------------------------
+| LOGIN API
+|--------------------------------------------------------------------------
+*/
+
+Route::post('/login', [AuthController::class, 'login']);
+
+
+/*
+|--------------------------------------------------------------------------
+| API UMUM
+|--------------------------------------------------------------------------
+*/
+
+// Kategori Menu
 Route::apiResource('kategori-menu', KategoriMenuController::class);
+
+// Menu
 Route::apiResource('menu', MenuController::class);
+
+// Meja
 Route::apiResource('meja', MejaController::class);
+
+// Pelanggan
 Route::apiResource('pelanggan', PelangganController::class);
 
-// Pelanggan boleh memesan tanpa login
+
+/*
+|--------------------------------------------------------------------------
+| PEMESANAN PELANGGAN TANPA LOGIN
+|--------------------------------------------------------------------------
+*/
+
 Route::post(
-    'pesanan-pelanggan',
+    '/pesanan-pelanggan',
     [PesananController::class, 'storeDariPelanggan']
 );
 
-// API khusus pegawai yang sudah login
+
+/*
+|--------------------------------------------------------------------------
+| API KHUSUS PEGAWAI
+|--------------------------------------------------------------------------
+*/
+
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Logout
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Kelola Pengguna
+    Route::apiResource('pengguna', AdminPenggunaController::class);
+
+    // Kelola Pesanan
     Route::apiResource('pesanan', PesananController::class);
 
+    // Detail Pesanan
     Route::apiResource('detail-pesanan', DetailPesananController::class);
+
+    // Transaksi
     Route::apiResource('transaksi', TransaksiController::class);
+
+    // Metode Pembayaran
     Route::apiResource('metode-pembayaran', MetodePembayaranController::class);
 
 });

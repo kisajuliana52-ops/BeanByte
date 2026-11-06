@@ -554,46 +554,99 @@ const slug = s => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-
 async function sinkronStokDatabase() {
   try {
     const response = await fetch('/api/menu', {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json'
+      },
+      credentials: 'same-origin',
       cache: 'no-store'
     });
-    if (!response.ok) throw new Error('API menu gagal: HTTP ' + response.status);
-    const data = await response.json();
-    const daftar = Array.isArray(data) ? data : (data.data || []);
-    if (!Array.isArray(daftar)) throw new Error('Format data menu tidak sesuai.');
 
-    // ID di sisi kiri adalah id_menu MySQL; nilai kanan harus cocok dengan MENU0.id.
+    const teks = await response.text();
+
+    if (!response.ok) {
+      throw new Error('API menu gagal: HTTP ' + response.status);
+    }
+
+    // Membersihkan pembungkus Markdown jika ada
+ const jsonBersih = teks
+  .replace('```php', '')
+  .replace('```json', '')
+  .replaceAll('```', '')
+  .trim();
+
+    const data = JSON.parse(jsonBersih);
+
+    const daftar = Array.isArray(data)
+      ? data
+      : (data.data || []);
+
+    if (!Array.isArray(daftar)) {
+      throw new Error('Format data menu tidak sesuai.');
+    }
+
+    // ID database disesuaikan dengan ID menu Admin
     const idMenuAdmin = {
-      1: 'nasi-goreng-spesial', 2: 'spaghetti', 3: 'matcha', 4: 'jus-strawberry',
-      6: 'americano', 7: 'latte', 8: 'cappucino', 9: 'caramel-macchiato',
-      10: 'affogato', 11: 'butterscots', 12: 'espresso', 13: 'cocolate',
-      14: 'fresh-orange', 15: 'milk tea', 16: 'croissant', 17: 'donat', 18: 'french-fries'
+      1: 'nasi-goreng-spesial',
+      2: 'spaghetti',
+      3: 'matcha',
+      4: 'jus-strawberry',
+      6: 'americano',
+      7: 'latte',
+      8: 'cappucino',
+      9: 'caramel-macchiato',
+      10: 'affogato',
+      11: 'butterscots',
+      12: 'espresso',
+      13: 'cocolate',
+      14: 'fresh-orange',
+      15: 'milk tea',
+      16: 'croissant',
+      17: 'donat',
+      18: 'french-fries'
     };
+
     let berubah = false;
+
     daftar.forEach(item => {
       const idLokal = idMenuAdmin[Number(item.id_menu)];
+
       if (!idLokal) return;
+
       const m = db.menu.find(x => x.id === idLokal);
+
       if (!m) {
         console.warn('ID menu Admin tidak cocok:', idLokal);
         return;
       }
+
       const stok = Number(item.stok);
       const harga = Number(item.harga);
-      if (m.stok !== stok || Number(m.harga) !== harga) berubah = true;
+
+      if (m.stok !== stok || Number(m.harga) !== harga) {
+        berubah = true;
+      }
+
       m.stok = stok;
       m.harga = harga;
       m.idDb = Number(item.id_menu);
       m.status = stok > 0 ? 'Tersedia' : 'Habis';
     });
+
     if (berubah) {
       save();
-      if (page === 'menu' && !modal) render();
+
+      if (page === 'menu' && !modal) {
+        render();
+      }
     }
+
+    console.log('Stok MySQL berhasil disinkronkan:', daftar);
+
   } catch (error) {
     console.error('Gagal sinkron stok MySQL:', error);
   }
 }
+
 
 const menuBy = id => db.menu.find(m => m.id === id) || {id, nama:'(menu dihapus)', harga:0, emoji:'❔', kat:'', foto:'x.jpg'};
 const katNama = id => (db.kat.find(k => k.id === id) || {nama:id}).nama;

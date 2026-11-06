@@ -212,26 +212,27 @@ const KEY = 'beanbyte_riwayat';
 const BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sept','Okt','Nov','Des'];
 
 
-const MENU_DATABASE = {
+
+// Hubungkan ID menu halaman dengan ID menu database
+const idMenuDatabase = {
+  'nasi-goreng-spesial': 1,
+  'spaghetti': 2,
+  'croissant': 16,
+  'donat': 17,
+  'french-fries': 18,
+  'matcha': 3,
+  'jus-strawberry': 4,
+  'cocolate': 13,
+  'fresh-orange': 14,
+  'milk-tea': 15,
   'americano': 6,
   'latte': 7,
   'cappuccino': 8,
   'caramel-macchiato': 9,
   'affogato': 10,
   'butterscots': 11,
-  'espresso': 12,
-  'cocolate': 13,
-  'matcha': 3,
-  'fresh-orange': 14,
-  'milk-tea': 15,
-  'jus-strawberry': 4,
-  'croissant': 16,
-  'spaghetti': 2,
-  'donat': 17,
-  'french-fries': 18,
-  'nasi-goreng-spesial': 1
+  'espresso': 12
 };
-
 // [id, nama, kategori, file foto, emoji cadangan]
 const MENU = [
   ['americano','Americano','kopi','americano.jpg','🧊'],
@@ -253,7 +254,7 @@ const MENU = [
   ['nasi-goreng-spesial','Nasi Goreng Spesial','makanan','nasi-goreng-spesial.jpg','🍳']
 ].map(([id,nama,kat,foto,emoji]) => ({
   id,
-  id_menu: MENU_DATABASE[id],
+  id_menu: idMenuDatabase[id],
   nama,
   kat,
   foto,
@@ -537,31 +538,9 @@ function scanFile(inp) {
   img.src = URL.createObjectURL(f);
 }
 
+
  
-/* ===================== DATABASE MENU ===================== */
-
-// Hubungkan ID menu halaman dengan ID menu di database MySQL
-const idMenuDatabase = {
-  'nasi-goreng-spesial': 1,
-  'spaghetti': 2,
-  'croissant': 16,
-  'donat': 17,
-  'french-fries': 18,
-
-  'matcha': 3,
-  'jus-strawberry': 4,
-  'cocolate': 13,
-  'fresh-orange': 14,
-  'milk-tea': 15,
-
-  'americano': 6,
-  'latte': 7,
-  'cappuccino': 8,
-  'caramel-macchiato': 9,
-  'affogato': 10,
-  'butterscots': 11,
-  'espresso': 12
-};
+/* ===================== SINKRON STOK MENU ===================== */
 
 
 /* ===================== SINKRON STOK MENU ===================== */
@@ -575,21 +554,29 @@ async function perbaruiStokMenu() {
       cache: 'no-store'
     });
 
+    const teks = await response.text();
+
+    console.log('Respons asli API menu:', teks);
+
     if (!response.ok) {
-      throw new Error('Gagal mengambil stok dari database.');
+      throw new Error('Gagal mengambil stok. HTTP ' + response.status);
     }
 
-    const hasil = await response.json();
+    const jsonBersih = teks.trim()
+      .replace(/^```(?:json|php)?\s*/i, '')
+      .replace(/\s*```$/, '');
+
+    const hasil = JSON.parse(jsonBersih);
 
     if (!Array.isArray(hasil)) {
-      throw new Error('Format data menu dari database tidak sesuai.');
+      throw new Error('Data API menu bukan array.');
     }
 
     MENU.forEach(menu => {
       const idDatabase = idMenuDatabase[menu.id];
 
-      const menuDB = hasil.find(
-        item => Number(item.id_menu) === Number(idDatabase)
+      const menuDB = hasil.find(item =>
+        Number(item.id_menu) === Number(idDatabase)
       );
 
       if (menuDB) {
@@ -599,12 +586,13 @@ async function perbaruiStokMenu() {
     });
 
     render();
+
+    console.log('Stok berhasil diperbarui:', MENU);
+
   } catch (error) {
     console.error('Gagal memperbarui stok:', error);
   }
 }
-
-
 
 /* ===================== KIRIM PESANAN ===================== */
 
@@ -941,24 +929,27 @@ const SCREENS = {
   },
 
   // 8. Pesanan berhasil
-  sukses: () => {
-    const o = cur.order;
+sukses: () => {
+  const o = cur.order;
 
-    return `<div class="screen dark">
-      <div class="okcircle">${I.check}</div>
-      <h1>Pesanan Berhasil!</h1>
-      <p class="sub">Terimakasih sudah memesan<br>di BeanByte.</p>
-      <p class="sub" style="margin-top:6px;opacity:.85">Pesananmu sudah diteruskan ke kasir.</p>
-      <div class="rcard">
-        <div class="nm">${esc(o.nama)}</div>
-        <small>No. Pesanan</small><b>${o.no}</b>
-        <small>Total Pembayaran</small><b>${rp(o.total)}</b>
-        ${o.catatan ? `<small>Catatan</small><b>${esc(o.catatan)}</b>` : ''}
-      </div>
-      <button class="btn2" onclick="navTo('beranda')">Kembali ke Beranda</button>
-    </div>`;
-  },
+  const namaAman = esc(o.nama);
+  const nomorAman = esc(o.no);
+  const catatanAman = esc(o.catatan || '');
 
+  return `<div class="screen dark">
+    <div class="okcircle">${I.check}</div>
+    <h1>Pesanan Berhasil!</h1>
+    <p class="sub">Terimakasih sudah memesan<br>di BeanByte.</p>
+    <p class="sub" style="margin-top:6px;opacity:.85">Pesananmu sudah diteruskan ke kasir.</p>
+    <div class="rcard">
+      <div class="nm">${namaAman}</div>
+      <small>No. Pesanan</small><b>${nomorAman}</b>
+      <small>Total Pembayaran</small><b>${rp(Number(o.total) || 0)}</b>
+      ${o.catatan ? `<small>Catatan</small><b>${catatanAman}</b>` : ''}
+    </div>
+    <button class="btn2" onclick="navTo('beranda')">Kembali ke Beranda</button>
+  </div>`;
+},
   // 9. Riwayat pesanan
   riwayat: () => {
     const list = riwayat.filter(
@@ -968,12 +959,30 @@ const SCREENS = {
           : ['Menunggu', 'Sedang Diproses'].includes(o.status))
     );
 
-    const cards = list.length
-      ? list.map(o => `<div class="ocard">
-        <span class="no">${o.no}</span><span class="badge ${o.status === 'Selesai' ? 'selesai' : (o.status === 'Dibatalkan' ? 'batal' : 'proses')}">${o.status}</span>
-        <span class="tgl">${o.waktu}</span><span></span>
-        <span class="tot">${rp(o.total)}</span><span class="who">${esc(o.nama)}</span></div>`).join('')
-      : '<p class="empty">Belum ada pesanan</p>';
+    
+const cards = list.length
+  ? list.map(o => {
+      // Amankan data sebelum ditampilkan ke HTML
+      const noAman = esc(o.no);
+      const statusAman = esc(o.status);
+      const waktuAman = esc(o.waktu);
+      const namaAman = esc(o.nama);
+
+      // Tentukan class status dari daftar yang diizinkan
+      const kelasStatus = o.status === 'Selesai'
+        ? 'selesai'
+        : (o.status === 'Dibatalkan' ? 'batal' : 'proses');
+
+      return `<div class="ocard">
+        <span class="no">${noAman}</span>
+        <span class="badge ${kelasStatus}">${statusAman}</span>
+        <span class="tgl">${waktuAman}</span>
+        <span></span>
+        <span class="tot">${rp(Number(o.total) || 0)}</span>
+        <span class="who">${namaAman}</span>
+      </div>`;
+    }).join('')
+  : '<p class="empty">Belum ada pesanan</p>';
 
     return `<div class="screen">
       <div class="topbar" style="padding-top:34px"><button class="iconbtn" onclick="navTo('beranda')" aria-label="Kembali">${I.back}</button><h1>Riwayat Pesanan</h1></div>

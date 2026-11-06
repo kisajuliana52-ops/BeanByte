@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Database\ConnectionException;
@@ -6,10 +5,11 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Illuminate\Database\QueryException;
+use Illuminate\Auth\AuthenticationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,8 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
 
-        // Aktifkan session dan cookie untuk autentikasi Sanctum
+        // Autentikasi Sanctum
         $middleware->statefulApi();
+
+        // API tanpa login harus mengembalikan JSON, bukan redirect HTML
+        $middleware->redirectGuestsTo(function (Request $request) {
+            return $request->is('api/*') ? null : '/login';
+        });
 
         // Middleware role
         $middleware->alias([
@@ -37,9 +42,16 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (Throwable $e, Request $request) {
 
-            // Penanganan khusus untuk API
             if (!$request->is('api/*')) {
                 return null;
+            }
+
+            // Belum login
+            if ($e instanceof AuthenticationException) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Silakan login terlebih dahulu.',
+                ], 401);
             }
 
             // Endpoint tidak ditemukan
@@ -54,22 +66,22 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($e instanceof AccessDeniedHttpException) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Kamu tidak memiliki izin untuk mengakses data ini.',
+                    'message' => 'Kamu tidak memiliki izin mengakses data ini.',
                 ], 403);
             }
 
-            // Koneksi database bermasalah
+            // Database bermasalah
             if (
                 $e instanceof ConnectionException ||
                 $e instanceof QueryException
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Database tidak dapat dihubungi. Pastikan MySQL XAMPP sudah berjalan.',
+                    'message' => 'Database tidak dapat dihubungi. Pastikan MySQL XAMPP berjalan.',
                 ], 503);
             }
 
-            // Penanganan HTTP error lainnya
+            // HTTP error lainnya
             if ($e instanceof HttpExceptionInterface) {
                 $status = $e->getStatusCode();
 

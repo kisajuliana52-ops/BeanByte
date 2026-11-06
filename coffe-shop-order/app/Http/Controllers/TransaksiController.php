@@ -6,6 +6,7 @@ use App\Models\Transaksi;
 use App\Models\Pesanan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class TransaksiController extends Controller
 {
@@ -23,20 +24,23 @@ class TransaksiController extends Controller
     // Membuat transaksi pembayaran
     public function store(Request $request)
     {
-        // Validasi data yang dikirim
         $data = $request->validate([
             'id_pesanan' => 'required|integer|exists:pesanans,id_pesanan',
             'id_metode' => 'required|integer|exists:metode_pembayarans,id_metode',
             'tanggal_transaksi' => 'nullable|date',
             'total_bayar' => 'required|numeric|min:0',
-            'bukti_pembayaran' => 'nullable|string|max:255',
+            'bukti_pembayaran' => [
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png',
+                'max:2048',
+            ],
             'status_transaksi' => 'required|string|max:30',
         ]);
 
-        // Memastikan pesanan tersedia
         $pesanan = Pesanan::findOrFail($data['id_pesanan']);
 
-        // Memastikan pembayaran tidak melebihi tagihan
         if ((float) $data['total_bayar'] > (float) $pesanan->total_harga) {
             return response()->json([
                 'message' => 'Total pembayaran melebihi total tagihan.',
@@ -44,7 +48,15 @@ class TransaksiController extends Controller
             ], 422);
         }
 
-        // Menyimpan transaksi
+        // Simpan file bukti pembayaran dengan nama acak
+        if ($request->hasFile('bukti_pembayaran')) {
+            $data['bukti_pembayaran'] = $request
+                ->file('bukti_pembayaran')
+                ->store('bukti-pembayaran', 'public');
+        } else {
+            unset($data['bukti_pembayaran']);
+        }
+
         $transaksi = DB::transaction(function () use ($data, $pesanan) {
             if (empty($data['tanggal_transaksi'])) {
                 $data['tanggal_transaksi'] = now();
@@ -52,7 +64,6 @@ class TransaksiController extends Controller
 
             $transaksi = Transaksi::create($data);
 
-            // Jika pembayaran berhasil, pesanan menjadi selesai
             if ($data['status_transaksi'] === 'berhasil') {
                 $pesanan->status = 'selesai';
                 $pesanan->save();
@@ -91,11 +102,17 @@ class TransaksiController extends Controller
             'id_metode' => 'sometimes|required|integer|exists:metode_pembayarans,id_metode',
             'tanggal_transaksi' => 'sometimes|nullable|date',
             'total_bayar' => 'sometimes|required|numeric|min:0',
-            'bukti_pembayaran' => 'sometimes|nullable|string|max:255',
+            'bukti_pembayaran' => [
+                'sometimes',
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png',
+                'max:2048',
+            ],
             'status_transaksi' => 'sometimes|required|string|max:30',
         ]);
 
-        // Jika total pembayaran diubah, periksa tagihan pesanan
         $idPesanan = $data['id_pesanan'] ?? $transaksi->id_pesanan;
         $totalBayar = $data['total_bayar'] ?? $transaksi->total_bayar;
 
@@ -108,9 +125,23 @@ class TransaksiController extends Controller
             ], 422);
         }
 
+        // Jika ada bukti baru, hapus bukti lama dan simpan file baru
+        if ($request->hasFile('bukti_pembayaran')) {
+            if ($transaksi->bukti_pembayaran) {
+                Storage::disk('public')->delete(
+                    $transaksi->bukti_pembayaran
+                );
+            }
+
+            $data['bukti_pembayaran'] = $request
+                ->file('bukti_pembayaran')
+                ->store('bukti-pembayaran', 'public');
+        } else {
+            unset($data['bukti_pembayaran']);
+        }
+
         $transaksi->update($data);
 
-        // Perbarui status pesanan jika pembayaran berhasil
         if (($data['status_transaksi'] ?? $transaksi->status_transaksi) === 'berhasil') {
             $pesanan->status = 'selesai';
             $pesanan->save();
@@ -129,6 +160,12 @@ class TransaksiController extends Controller
     public function destroy($id)
     {
         $transaksi = Transaksi::findOrFail($id);
+
+        if ($transaksi->bukti_pembayaran) {
+            Storage::disk('public')->delete(
+                $transaksi->bukti_pembayaran
+            );
+        }
 
         $transaksi->delete();
 
