@@ -332,6 +332,7 @@ function sinkron() {
 const API_PESANAN = '/kasir/data/pesanan';
 const API_MENU = '/api/menu';
 const API_TRANSAKSI = '/kasir/data/transaksi';
+const API_UBAH_STATUS = '/kasir/data/pesanan';
 let apiSedangDimuat = false;
 let apiGagalPernah = false;
 
@@ -574,11 +575,13 @@ async function sinkronPesananDatabase() {
 
         items: items,
 
-        status: lama?.status || statusDariDatabase(p.status),
+        status: statusDariDatabase(p.status),
 
         waktu: waktuDariDatabase(
           p.tanggal_pesanan || p.created_at
         ),
+        // Tanggal asli dari MySQL dipakai untuk statistik hari ini.
+        tanggalDB: p.tanggal_pesanan || p.created_at || null,
 
         metode: String(namaMetode).toLowerCase().includes('qris')
           ? 'QRIS'
@@ -668,7 +671,13 @@ async function sinkronTransaksiDatabase() {
         metode: String(namaMetode).toLowerCase().includes('qris') ? 'QRIS' : 'Tunai',
         items,
         totalDatabase: Number(t.total_bayar ?? t.total ?? pesanan.total_harga ?? 0),
-        statusDatabase: t.status || ''
+        status: (() => {
+          const st = String(t.status_transaksi ?? t.status ?? 'pending').toLowerCase();
+          if (['berhasil', 'lunas', 'success', 'paid'].includes(st)) return 'Berhasil';
+          if (st.includes('batal')) return 'Dibatalkan';
+          return 'Pending';
+        })(),
+        tanggalDB: t.tanggal_transaksi || t.created_at || pesanan.tanggal_pesanan || null
       };
     });
     if (!db.trx.some(t => t.trx === selTrx)) selTrx = db.trx.length ? db.trx[0].trx : null;
@@ -887,7 +896,7 @@ function trxHtml() {
   const l = visibleTrx();
   if (!l.length) return '<p class="empty">Transaksi tidak ditemukan</p>';
   return `<table class="tb"><thead><tr><th>No</th><th>Tanggal &amp; Waktu</th><th>Nama Pelanggan</th><th>No. Transaksi</th><th>Total</th><th>Metode Pembayaran</th><th>Status</th></tr></thead><tbody>
-    ${l.map((t, i) => `<tr class="${t.trx === selTrx ? 'sel' : ''}" onclick="pilihTrx('${t.trx}')"><td>${i + 1}</td><td>${t.waktu}</td><td>${esc(t.nama)}</td><td>${t.trx}</td><td>${rp(t.totalDatabase ?? calc(t.items).total)}</td><td>${t.metode}</td><td>${badge('Selesai')}</td></tr>`).join('')}
+    ${l.map((t, i) => `<tr class="${t.trx === selTrx ? 'sel' : ''}" onclick="pilihTrx('${t.trx}')"><td>${i + 1}</td><td>${t.waktu}</td><td>${esc(t.nama)}</td><td>${t.trx}</td><td>${rp(t.totalDatabase ?? calc(t.items).total)}</td><td>${t.metode}</td><td>${badge(t.status || 'Pending')}</td></tr>`).join('')}
   </tbody></table>`;
 }
 
@@ -896,7 +905,7 @@ function detailTrx() {
   if (!t) return `<aside class="rp"><div class="rp-h"><h2>Detail Transaksi</h2></div><p class="empty">Pilih transaksi dari daftar</p></aside>`;
   const c = calc(t.items); c.total = Number(t.totalDatabase) || c.total;
   return `<aside class="rp">
-    <div class="rp-h"><h2>Detail Transaksi</h2>${badge('Selesai')}</div>
+    <div class="rp-h"><h2>Detail Transaksi</h2>${badge(t.status || 'Pending')}</div>
     <div class="kv"><small>No. Pesanan</small><b>${t.trx}</b></div>
     <div class="kv"><small>Tanggal &amp; Waktu</small><span>${t.waktu}</span></div>
     <div class="kv"><small>Pelanggan</small><span>${esc(t.nama)}</span></div>
@@ -915,18 +924,36 @@ function detailTrx() {
   </aside>`;
 }
 
+// Membandingkan tanggal MySQL YYYY-MM-DD dalam zona waktu lokal browser tanpa pergeseran UTC.
+function tanggalDatabaseHariIni(value) {
+  if (!value) return false;
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    return match[1] === today;
+  }
+  const date = new Date(text);
+  const now = new Date();
+  return !Number.isNaN(date.getTime()) && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+}
+
 /* ===================== LAYAR ===================== */
 const SCREENS = {
 
   dashboard: () => {
     const O = db.orders;
-    const pendapatan = O.filter(o => o.status === 'Selesai').reduce((s, o) => s + calc(o.items).total, 0);
+    // Statistik Kasir memakai tanggal dan transaksi dari database, sama seperti Admin.
+    const hariIni = O.filter(o => tanggalDatabaseHariIni(o.tanggalDB));
+    const transaksiHariIni = db.trx.filter(t => t.status === 'Berhasil' && tanggalDatabaseHariIni(t.tanggalDB));
+    const pendapatan = transaksiHariIni.reduce((s, t) => s + (Number(t.totalDatabase) || 0), 0);
     return shell(`<div class="body"><div class="col">
       <div class="welcome"><div><h1>Selamat Datang Kasir!</h1><p>Semangat bekerja, setiap pesanan adalah kebahagiaan pelanggan</p></div>${dateChip()}</div>
       <div class="stats">
-        ${statCard(I.clip, 'Total Pesanan Hari ini', O.length, 'Pesanan')}
-        ${statCard(I.clock, 'Pesanan Diproses', O.filter(o => o.status === 'Diproses').length, 'Pesanan')}
-        ${statCard(I.check, 'Pesanan Selesai', O.filter(o => o.status === 'Selesai').length, 'Pesanan')}
+        ${statCard(I.clip, 'Total Pesanan Hari ini', hariIni.length, 'Pesanan')}
+        ${statCard(I.clock, 'Pesanan Diproses', hariIni.filter(o => o.status === 'Diproses').length, 'Pesanan')}
+        ${statCard(I.check, 'Pesanan Selesai', hariIni.filter(o => o.status === 'Selesai').length, 'Pesanan')}
         ${statCard(I.dollar, 'Total Pendapatan Hari ini', rp(pendapatan), '')}
       </div>
       <section class="card"><div class="card-h"><h2>Daftar Pesanan</h2>${tabs()}</div><div id="tbl">${ordersHtml()}</div></section>
@@ -1004,46 +1031,83 @@ function setBayar(v, isi) {
   if (isi) { const u = $('#uang'); if (u) u.value = o.bayar.toLocaleString('id-ID'); }
 }
 
-function ubahStatus() {
-  const o = curOrder(); if (!o) return;
+async function ubahStatus() {
+  const o = curOrder();
+  if (!o) return;
   if (o.status === 'Selesai') return toast('Pesanan sudah selesai');
   if (!o.items.length) return toast('Pesanan belum ada menu');
-  if (o.status === 'Menunggu') {
-    o.status = 'Diproses';
-  } else {
-    // Tunai: uang diterima harus cukup sebelum pesanan diselesaikan
-    const total = calc(o.items).total;
-    if (o.metode === 'Tunai' && (!o.bayar || o.bayar < total)) {
-      toast(o.bayar ? 'Uang diterima kurang ' + rp(total - o.bayar) : 'Isi uang diterima dulu');
-      const u = $('#uang'); if (u) u.focus();
-      return;
-    }
-    o.status = 'Selesai';
-    const d = new Date();
-    const ymd = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
-    const n = db.trx.filter(t => t.trx.startsWith('TRX-' + ymd)).length + 1;
-    const trx = {
-      trx: `TRX-${ymd}-${String(n).padStart(3, '0')}`,
-      waktu: `${d.getDate()} ${BLN[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
-      nama: o.nama, metode: o.metode, items: o.items.map(i => Object.assign({}, i))
-    };
-    if (o.metode === 'Tunai') trx.bayar = o.bayar;
-    db.trx.unshift(trx);
-    if (o.metode === 'Tunai') toast('Kembalian ' + rp(o.bayar - total));
+  if (!o.idDatabase) return toast('ID pesanan database tidak ditemukan. Muat ulang daftar pesanan.');
+
+  const statusBaru = o.status === 'Menunggu' ? 'diproses' : 'selesai';
+  const total = calc(o.items).total;
+
+  if (statusBaru === 'selesai' && o.metode === 'Tunai' && (!o.bayar || o.bayar < total)) {
+    toast(o.bayar ? 'Uang diterima kurang ' + rp(total - o.bayar) : 'Isi uang diterima dulu');
+    const u = $('#uang'); if (u) u.focus();
+    return;
   }
-  setStatusAntrian(o.pes, o.status);
-  save(); render();
-  if (o.status !== 'Selesai' || o.metode !== 'Tunai') toast('Status pesanan ' + o.pes + ': ' + o.status);
+
+  const tombol = document.querySelector('button[onclick="ubahStatus()"]');
+  if (tombol) tombol.disabled = true;
+
+  try {
+    const token = document.querySelector('input[name="_token"]')?.value || '';
+    const response = await fetch(`${API_UBAH_STATUS}/${o.idDatabase}/status`, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify({
+        status: statusBaru,
+        metode: o.metode,
+        total_bayar: total
+      })
+    });
+
+    const hasil = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(hasil.message || `Gagal menyimpan status (HTTP ${response.status})`);
+
+    setStatusAntrian(o.pes, statusBaru === 'selesai' ? 'Selesai' : 'Diproses');
+    await Promise.all([sinkronPesananDatabase(), sinkronTransaksiDatabase()]);
+    render();
+
+    if (statusBaru === 'selesai' && o.metode === 'Tunai') {
+      toast('Pesanan selesai. Kembalian ' + rp(o.bayar - total));
+    } else {
+      toast('Status pesanan berhasil disimpan ke database.');
+    }
+  } catch (error) {
+    console.error('Gagal memperbarui status pesanan:', error);
+    toast(error.message || 'Status pesanan gagal disimpan.');
+  } finally {
+    if (tombol) tombol.disabled = false;
+  }
 }
 
-function batalkan() {
+async function batalkan() {
   const o = curOrder(); if (!o) return;
   if (!confirm('Batalkan pesanan ' + o.pes + ' atas nama ' + o.nama + '?')) return;
-  setStatusAntrian(o.pes, 'Dibatalkan');
-  db.orders = db.orders.filter(x => x.pes !== o.pes);
-  selOrder = db.orders.length ? db.orders[0].pes : null;
-  save(); render();
-  toast('Pesanan ' + o.pes + ' dibatalkan');
+  if (!o.idDatabase) return toast('ID pesanan database tidak ditemukan.');
+  try {
+    const token = document.querySelector('input[name="_token"]')?.value || '';
+    const response = await fetch(`${API_UBAH_STATUS}/${o.idDatabase}/status`, {
+      method:'PUT', credentials:'same-origin',
+      headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token},
+      body:JSON.stringify({status:'dibatalkan', metode:o.metode})
+    });
+    const hasil = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(hasil.message || `HTTP ${response.status}`);
+    setStatusAntrian(o.pes, 'Dibatalkan');
+    await Promise.all([sinkronPesananDatabase(), sinkronTransaksiDatabase()]);
+    render();
+    toast('Pesanan berhasil dibatalkan.');
+  } catch (error) {
+    console.error(error);
+    toast(error.message || 'Pesanan gagal dibatalkan.');
+  }
 }
 /* ===== Struk (kertas thermal) =====
    LEBAR_STRUK: 80 = kertas 80 mm (paling umum), 58 = kertas 58 mm. Ganti TOKO sesuai data coffee shop. */

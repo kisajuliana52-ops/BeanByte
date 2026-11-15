@@ -7,6 +7,7 @@ use App\Http\Controllers\PesananController;
 use App\Http\Controllers\TransaksiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -68,7 +69,6 @@ Route::get('/pelanggan', function () {
     return view('auth.pelanggan.index');
 })->name('pelanggan');
 
-
 /*
 |--------------------------------------------------------------------------
 | HALAMAN KASIR
@@ -86,6 +86,90 @@ Route::middleware(['auth', 'role:kasir'])->group(function () {
 
     // Mengambil data transaksi dari database
     Route::get('/kasir/data/transaksi', [TransaksiController::class, 'index']);
+
+    // Menyimpan perubahan status pesanan Kasir langsung ke MySQL.
+    Route::put('/kasir/data/pesanan/{id}/status', function (Request $request, $id) {
+        $data = $request->validate([
+            'status' => 'required|in:diproses,selesai,dibatalkan',
+            'metode' => 'nullable|string|max:50',
+            'total_bayar' => 'nullable|numeric|min:0',
+        ]);
+
+        return DB::transaction(function () use ($data, $id) {
+            $pesanan = DB::table('pesanans')
+                ->where('id_pesanan', $id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$pesanan) {
+                return response()->json(['message' => 'Pesanan tidak ditemukan.'], 404);
+            }
+
+            $totalDetail = (float) DB::table('detail_pesanans')
+                ->where('id_pesanan', $id)
+                ->sum('subtotal');
+
+            $total = (float) ($pesanan->total_harga ?? 0);
+            if ($total <= 0 && $totalDetail > 0) {
+                $total = $totalDetail;
+                DB::table('pesanans')->where('id_pesanan', $id)->update([
+                    'total_harga' => $total,
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::table('pesanans')->where('id_pesanan', $id)->update([
+                'status' => $data['status'],
+                'updated_at' => now(),
+            ]);
+
+            if ($data['status'] === 'selesai') {
+                $namaMetode = trim($data['metode'] ?? 'Tunai');
+                $metode = DB::table('metode_pembayarans')
+                    ->whereRaw('LOWER(nama_metode) = ?', [mb_strtolower($namaMetode)])
+                    ->first();
+
+                if (!$metode) {
+                    $metode = DB::table('metode_pembayarans')->orderBy('id_metode')->first();
+                }
+
+                if (!$metode) {
+                    throw new \RuntimeException('Metode pembayaran belum tersedia di database.');
+                }
+
+                $transaksi = DB::table('transaksis')->where('id_pesanan', $id)->first();
+                $payloadTransaksi = [
+                    'id_metode' => $metode->id_metode,
+                    'tanggal_transaksi' => now(),
+                    'total_bayar' => $total,
+                    'status_transaksi' => 'berhasil',
+                    'updated_at' => now(),
+                ];
+                 if ($transaksi) {
+                    DB::table('transaksis')
+                        ->where('id_transaksi', $transaksi->id_transaksi)
+                        ->update($payloadTransaksi);
+                } else {
+                    $payloadTransaksi['id_pesanan'] = $id;
+                    $payloadTransaksi['bukti_pembayaran'] = null;
+                    $payloadTransaksi['created_at'] = now();
+                    DB::table('transaksis')->insert($payloadTransaksi);
+                }
+            } elseif ($data['status'] === 'dibatalkan') {
+                DB::table('transaksis')->where('id_pesanan', $id)->update([
+                    'status_transaksi' => 'dibatalkan',
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Status pesanan berhasil disimpan.',
+                'id_pesanan' => (int) $id,
+                'status' => $data['status'],
+                'total_harga' => $total,
+            ]);
+        });
+    });
 
 });
 
@@ -116,8 +200,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::delete('/admin/pengguna/{pengguna}', [AdminPenggunaController::class, 'destroy']);
         // DATA UTAMA ADMIN
     Route::get('/admin/data', [AdminDataController::class, 'index']);
-
-    // KELOLA MENU
+// KELOLA MENU
     Route::post('/admin/data/menu', [AdminDataController::class, 'storeMenu']);
     Route::put('/admin/data/menu/{id}', [AdminDataController::class, 'updateMenu']);
     Route::delete('/admin/data/menu/{id}', [AdminDataController::class, 'destroyMenu']);
@@ -145,11 +228,13 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('role:pemilik')->group(function () {
+Route::middleware(['auth', 'role:pemilik'])->group(function () {
 
     Route::get('/pemilik', function () {
         return view('auth.pemilik.index');
     });
+
+    Route::get('/pemilik/data/dashboard', [LaporanPemilikController::class, 'dashboard']);
 
     Route::get('/pemilik/laporan/data', [LaporanPemilikController::class, 'data']);
 

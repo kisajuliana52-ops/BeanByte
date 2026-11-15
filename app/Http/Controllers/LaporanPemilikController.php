@@ -46,8 +46,10 @@ class LaporanPemilikController extends Controller
                 break;
 
             case 'custom':
-                if (!$request->filled('tanggal_mulai') ||
-                    !$request->filled('tanggal_selesai')) {
+                if (
+                    !$request->filled('tanggal_mulai') ||
+                    !$request->filled('tanggal_selesai')
+                ) {
                     abort(422, 'Tanggal mulai dan tanggal selesai wajib diisi.');
                 }
 
@@ -67,13 +69,13 @@ class LaporanPemilikController extends Controller
             'pesanan.detailPesanans.menu',
             'metodePembayaran',
         ])
-        ->where('status_transaksi', 'berhasil')
-        ->whereBetween('tanggal_transaksi', [
-            $mulai->toDateTimeString(),
-            $selesai->toDateTimeString(),
-        ])
-        ->orderBy('tanggal_transaksi', 'desc')
-        ->get();
+            ->where('status_transaksi', 'berhasil')
+            ->whereBetween('tanggal_transaksi', [
+                $mulai->toDateTimeString(),
+                $selesai->toDateTimeString(),
+            ])
+            ->orderBy('tanggal_transaksi', 'desc')
+            ->get();
 
         $totalPendapatan = $transaksi->sum('total_bayar');
         $jumlahTransaksi = $transaksi->count();
@@ -175,6 +177,93 @@ class LaporanPemilikController extends Controller
     }
 
     /**
+     * Data khusus dashboard Pemilik.
+     */
+    public function dashboard()
+    {
+        $batas = Carbon::now()->subDays(59)->startOfDay();
+
+        $menus = DB::table('menus')
+            ->leftJoin(
+                'kategori_menus',
+                'menus.id_kategori',
+                '=',
+                'kategori_menus.id_kategori'
+            )
+            ->select(
+                'menus.id_menu',
+                'menus.nama_menu',
+                'menus.harga',
+                'kategori_menus.nama_kategori'
+            )
+            ->orderBy('menus.nama_menu')
+            ->get();
+
+        $transaksi = DB::table('transaksis')
+            ->join(
+                'pesanans',
+                'transaksis.id_pesanan',
+                '=',
+                'pesanans.id_pesanan'
+            )
+            ->leftJoin(
+                'pelanggans',
+                'pesanans.id_pelanggan',
+                '=',
+                'pelanggans.id_pelanggan'
+            )
+            ->leftJoin(
+                'metode_pembayarans',
+                'transaksis.id_metode',
+                '=',
+                'metode_pembayarans.id_metode'
+            )
+            ->leftJoin(
+                'detail_pesanans',
+                'pesanans.id_pesanan',
+                '=',
+                'detail_pesanans.id_pesanan'
+            )
+            ->leftJoin(
+                'menus',
+                'detail_pesanans.id_menu',
+                '=',
+                'menus.id_menu'
+            )
+            ->leftJoin(
+                'kategori_menus',
+                'menus.id_kategori',
+                '=',
+                'kategori_menus.id_kategori'
+            )
+            ->where('transaksis.status_transaksi', 'berhasil')
+            ->where('transaksis.tanggal_transaksi', '>=', $batas)
+            ->select(
+                'transaksis.id_transaksi',
+                'transaksis.id_pesanan',
+                'transaksis.tanggal_transaksi',
+                'transaksis.total_bayar',
+                'transaksis.status_transaksi',
+                'pelanggans.nama_pelanggan',
+                'metode_pembayarans.nama_metode',
+                'detail_pesanans.id_menu',
+                'detail_pesanans.jumlah',
+                'detail_pesanans.harga_satuan',
+                'detail_pesanans.subtotal',
+                'menus.nama_menu',
+                'menus.harga as harga_menu',
+                'kategori_menus.nama_kategori'
+            )
+            ->orderByDesc('transaksis.tanggal_transaksi')
+            ->get();
+
+        return response()->json([
+            'menus' => $menus,
+            'transaksi' => $transaksi,
+        ]);
+    }
+
+    /**
      * Endpoint data laporan untuk dashboard.
      */
     public function data(Request $request)
@@ -200,20 +289,19 @@ class LaporanPemilikController extends Controller
     }
 
     /**
- * Membuat PDF khusus produk terlaris.
- */
-public function pdfProdukTerlaris(Request $request)
-{
-    $laporan = $this->ambilDataLaporan($request);
+     * Membuat PDF khusus produk terlaris.
+     */
+    public function pdfProdukTerlaris(Request $request)
+    {
+        $laporan = $this->ambilDataLaporan($request);
 
-    $produkTerlaris = $laporan['produk_terlaris'];
+        $produkTerlaris = $laporan['produk_terlaris'];
 
-    $pdf = Pdf::loadView(
-        'auth.pemilik.produk-terlaris-pdf',
-        compact('laporan', 'produkTerlaris')
-    )->setPaper('a4', 'portrait');
+        $pdf = Pdf::loadView(
+            'auth.pemilik.produk-terlaris-pdf',
+            compact('laporan', 'produkTerlaris')
+        )->setPaper('a4', 'portrait');
 
-    return $pdf->download('Produk-Terlaris-BeanByte.pdf');
+        return $pdf->download('Produk-Terlaris-BeanByte.pdf');
+    }
 }
-}
-

@@ -680,7 +680,34 @@ function setPeriod(v) { period = v; render(); }
 function setChartN(v) { chartN = parseInt(v, 10); render(); }
 function setTopRange(v) { topRange = v; render(); }
 function toggleTerAll() { terAll = !terAll; render(); }
-function exportPdf() { window.print(); }
+function exportPdf() {
+  // Gunakan endpoint PDF khusus, bukan mencetak halaman dashboard HTML.
+  const jumlahHari = (PER[period] || PER['7d']).len;
+  const akhir = new Date();
+  const awal = new Date();
+  awal.setHours(0, 0, 0, 0);
+  akhir.setHours(0, 0, 0, 0);
+  awal.setDate(awal.getDate() - jumlahHari + 1);
+
+  const tanggal = d => {
+    const tahun = d.getFullYear();
+    const bulan = String(d.getMonth() + 1).padStart(2, '0');
+    const hari = String(d.getDate()).padStart(2, '0');
+    return `${tahun}-${bulan}-${hari}`;
+  };
+
+  const parameter = new URLSearchParams({
+    periode: 'custom',
+    tanggal_mulai: tanggal(awal),
+    tanggal_selesai: tanggal(akhir)
+  });
+
+  const tujuan = page === 'terlaris'
+    ? '/pemilik/produk-terlaris/pdf'
+    : '/pemilik/laporan/pdf';
+
+  window.location.href = `${tujuan}?${parameter.toString()}`;
+}
 
 document.addEventListener('click', e => {
   if ((userMenu || bellOpen) && !e.target.closest('.wrapdd')) { userMenu = false; bellOpen = false; render(); }
@@ -729,9 +756,15 @@ render();
 loadDashboardData();
 setInterval(() => {
   const active = document.activeElement;
-  if (active && ['INPUT','SELECT','TEXTAREA'].includes(active.tagName)) return;
+  if (document.hidden || (active && ['INPUT','SELECT','TEXTAREA'].includes(active.tagName))) return;
   loadDashboardData();
-}, 30000);
+}, 10000);
+
+// Saat tab Pemilik dibuka kembali, ambil ulang data MySQL tanpa menunggu interval.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) loadDashboardData();
+});
+window.addEventListener('pageshow', () => loadDashboardData());
 </script>
 </body>
 </html>

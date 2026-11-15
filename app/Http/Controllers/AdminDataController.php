@@ -38,8 +38,8 @@ class AdminDataController extends Controller
             ->get();
 
         $pesanan = DB::table('pesanans')
-            ->join('pelanggans', 'pesanans.id_pelanggan', '=', 'pelanggans.id_pelanggan')
-            ->join('mejas', 'pesanans.id_meja', '=', 'mejas.id_meja')
+            ->leftJoin('pelanggans', 'pesanans.id_pelanggan', '=', 'pelanggans.id_pelanggan')
+            ->leftJoin('mejas', 'pesanans.id_meja', '=', 'mejas.id_meja')
             ->select(
                 'pesanans.*',
                 'pelanggans.nama_pelanggan',
@@ -51,7 +51,7 @@ class AdminDataController extends Controller
             ->get();
 
         $detailPesanan = DB::table('detail_pesanans')
-            ->join('menus', 'detail_pesanans.id_menu', '=', 'menus.id_menu')
+            ->leftJoin('menus', 'detail_pesanans.id_menu', '=', 'menus.id_menu')
             ->select(
                 'detail_pesanans.*',
                 'menus.nama_menu',
@@ -60,9 +60,9 @@ class AdminDataController extends Controller
             ->get();
 
         $transaksi = DB::table('transaksis')
-            ->join('pesanans', 'transaksis.id_pesanan', '=', 'pesanans.id_pesanan')
-            ->join('pelanggans', 'pesanans.id_pelanggan', '=', 'pelanggans.id_pelanggan')
-            ->join('metode_pembayarans', 'transaksis.id_metode', '=', 'metode_pembayarans.id_metode')
+            ->leftJoin('pesanans', 'transaksis.id_pesanan', '=', 'pesanans.id_pesanan')
+            ->leftJoin('pelanggans', 'pesanans.id_pelanggan', '=', 'pelanggans.id_pelanggan')
+            ->leftJoin('metode_pembayarans', 'transaksis.id_metode', '=', 'metode_pembayarans.id_metode')
             ->select(
                 'transaksis.*',
                 'pelanggans.nama_pelanggan',

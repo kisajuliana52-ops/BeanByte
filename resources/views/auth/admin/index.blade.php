@@ -381,13 +381,13 @@ function terapkanDataAdmin(data) {
   db.orders = pesanan.map(o => {
     const p = customerById.get(Number(o.id_pelanggan)) || {};
     const items = detailsByOrder.get(Number(o.id_pesanan)) || [];
-    return {no:String(o.id_pesanan),idDb:Number(o.id_pesanan),nama:o.nama_pelanggan || p.nama_pelanggan || '-',telp:o.no_hp || p.no_hp || '-',items,status:titleStatus(o.status),waktu:fmtJamDB(o.tanggal_pesanan),ts:waktuDB(o.tanggal_pesanan),meja:o.nomor_meja || mejaById.get(Number(o.id_meja)) || '-',metode:'-',catatan:items.map(i => i.catatan).filter(Boolean).join('; ') || '-',totalDatabase:Number(o.total_harga)||0,sumber:'database'};
+    return {no:String(o.id_pesanan),idDb:Number(o.id_pesanan),nama:o.nama_pelanggan || p.nama_pelanggan || '-',telp:o.no_hp || p.no_hp || '-',items,status:titleStatus(o.status),waktu:fmtJamDB(o.tanggal_pesanan),ts:waktuDB(o.tanggal_pesanan),tanggalDB:o.tanggal_pesanan || o.created_at || null,meja:o.nomor_meja || mejaById.get(Number(o.id_meja)) || '-',metode:'-',catatan:items.map(i => i.catatan).filter(Boolean).join('; ') || '-',totalDatabase:Number(o.total_harga)||0,sumber:'database'};
   });
   const orderById = new Map(pesanan.map(o => [Number(o.id_pesanan),o]));
   db.trx = transaksi.map(t => {
     const order = orderById.get(Number(t.id_pesanan)) || {};
     const items = detailsByOrder.get(Number(t.id_pesanan)) || [];
-    return {trx:`TRX-${t.id_transaksi}`,idDb:Number(t.id_transaksi),pes:String(t.id_pesanan),nama:t.nama_pelanggan || '-',telp:'-',items,metode:t.nama_metode || '-',status:titleStatus(t.status_transaksi),ts:waktuDB(t.tanggal_transaksi),kasir:'-',totalDatabase:Number(t.total_bayar)||0,bukti:t.bukti_pembayaran || ''};
+    return {trx:`TRX-${t.id_transaksi}`,idDb:Number(t.id_transaksi),pes:String(t.id_pesanan),nama:t.nama_pelanggan || '-',telp:'-',items,metode:t.nama_metode || '-',status:titleStatus(t.status_transaksi),ts:waktuDB(t.tanggal_transaksi),tanggalDB:t.tanggal_transaksi || t.created_at || null,kasir:'-',totalDatabase:Number(t.total_bayar)||0,bukti:t.bukti_pembayaran || ''};
   });
   // Tidak ada fallback localStorage: isi layar selalu mencerminkan respons database terbaru.
 }
@@ -637,15 +637,20 @@ function chartArea(days, vals) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%">${g}${area}${line}${lab}</svg>`;
 }
 
-function tanggalSamaHari(ts, pembanding = new Date()) {
-  const d = new Date(Number(ts) || 0);
+function tanggalSamaHari(nilai, pembanding = new Date()) {
+  // Utamakan tanggal mentah MySQL (YYYY-MM-DD) agar tidak bergeser akibat UTC.
+  if (typeof nilai === 'string') {
+    const m = nilai.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return Number(m[1]) === pembanding.getFullYear() && Number(m[2]) - 1 === pembanding.getMonth() && Number(m[3]) === pembanding.getDate();
+  }
+  const d = new Date(Number(nilai) || nilai || 0);
   return !Number.isNaN(d.getTime()) && d.getFullYear() === pembanding.getFullYear() && d.getMonth() === pembanding.getMonth() && d.getDate() === pembanding.getDate();
 }
 function pDashboard() {
   const O = db.orders;
-  const hariIni = O.filter(o => tanggalSamaHari(o.ts));
+  const hariIni = O.filter(o => tanggalSamaHari(o.tanggalDB || o.ts));
   const transaksiBerhasil = db.trx.filter(t => t.status === 'Berhasil');
-  const transaksiHariIni = transaksiBerhasil.filter(t => tanggalSamaHari(t.ts));
+  const transaksiHariIni = transaksiBerhasil.filter(t => tanggalSamaHari(t.tanggalDB || t.ts));
   const rev = transaksiHariIni.reduce((s, t) => s + (Number(t.totalDatabase) || 0), 0);
   const sold = transaksiHariIni.reduce((s, t) => s + calc(t.items).qty, 0);
   const pel = db.pelanggan.length;
@@ -1320,7 +1325,10 @@ async function simpanForm() {
     try {
       await requestPengguna(id ? `${API_PENGGUNA}/${id}` : API_PENGGUNA, {method:id ? 'PUT':'POST',body:JSON.stringify(payload)});
       closeModal(); await loadPengguna(); toast(id ? 'Pengguna berhasil diperbarui' : 'Pengguna berhasil ditambahkan');
-    } catch (error) { toast(error.message); console.error(error); }
+    } catch (error) {
+    window.alert('Gagal menyimpan akun: ' + error.message);
+    console.error('Detail error:', error);
+}
     return;
   }
   if (type === 'menu') {

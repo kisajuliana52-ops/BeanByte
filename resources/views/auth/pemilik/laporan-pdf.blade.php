@@ -143,12 +143,28 @@
 
     {{-- KOP SURAT BEANBYTE --}}
     @php
-        $logo = public_path('foto/logo.jpeg');
+    $logoData = null;
+    $logoMime = null;
 
-        $logoData = file_exists($logo)
-            ? 'data:image/jpeg;base64,' . base64_encode(file_get_contents($logo))
-            : null;
-    @endphp
+    // Cari logo pada lokasi yang digunakan project BeanByte.
+    $kandidatLogo = [
+        public_path('foto/logo.jpeg'),
+        public_path('foto/logo.jpg'),
+        public_path('foto/logo.png'),
+        public_path('images/logo-beanbyte.png'),
+        public_path('images/logo-beanbyte.jpg'),
+        public_path('images/logo-beanbyte.jpeg'),
+    ];
+
+    foreach ($kandidatLogo as $lokasiLogo) {
+        if (file_exists($lokasiLogo)) {
+            $ekstensi = strtolower(pathinfo($lokasiLogo, PATHINFO_EXTENSION));
+            $logoMime = $ekstensi === 'png' ? 'image/png' : 'image/jpeg';
+            $logoData = 'data:' . $logoMime . ';base64,' . base64_encode(file_get_contents($lokasiLogo));
+            break;
+        }
+    }
+@endphp
 
     <table class="kop">
         <tr>
