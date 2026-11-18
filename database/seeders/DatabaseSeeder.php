@@ -4,12 +4,16 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
         $waktu = now();
+
+        // Waktu tetap untuk data contoh
+        $waktuContoh = Carbon::parse('2026-10-21 10:00:00');
 
         // 1. KATEGORI MENU
         DB::table('kategori_menus')->updateOrInsert(
@@ -145,13 +149,13 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        // 5. PESANAN
+        // 5. PESANAN CONTOH
         $pesanans = [
             [
                 'id_pesanan' => 1,
                 'id_pelanggan' => 1,
                 'id_meja' => 1,
-                'tanggal_pesanan' => $waktu,
+                'tanggal_pesanan' => $waktuContoh,
                 'total_harga' => 44000,
                 'status' => 'menunggu',
                 'stok' => 0,
@@ -160,7 +164,7 @@ class DatabaseSeeder extends Seeder
                 'id_pesanan' => 2,
                 'id_pelanggan' => 2,
                 'id_meja' => 2,
-                'tanggal_pesanan' => $waktu,
+                'tanggal_pesanan' => $waktuContoh,
                 'total_harga' => 40000,
                 'status' => 'diproses',
                 'stok' => 0,
@@ -169,7 +173,7 @@ class DatabaseSeeder extends Seeder
                 'id_pesanan' => 3,
                 'id_pelanggan' => 3,
                 'id_meja' => 3,
-                'tanggal_pesanan' => $waktu,
+                'tanggal_pesanan' => $waktuContoh,
                 'total_harga' => 22000,
                 'status' => 'selesai',
                 'stok' => 0,
@@ -180,8 +184,8 @@ class DatabaseSeeder extends Seeder
             DB::table('pesanans')->updateOrInsert(
                 ['id_pesanan' => $pesanan['id_pesanan']],
                 array_merge($pesanan, [
-                    'created_at' => $waktu,
-                    'updated_at' => $waktu,
+                    'created_at' => $waktuContoh,
+                    'updated_at' => $waktuContoh,
                 ])
             );
         }
@@ -257,11 +261,6 @@ class DatabaseSeeder extends Seeder
                 'nama_metode' => 'QRIS',
                 'keterangan' => 'Pembayaran menggunakan QRIS',
             ],
-            [
-                'id_metode' => 3,
-                'nama_metode' => 'Transfer Bank',
-                'keterangan' => 'Pembayaran melalui transfer bank',
-            ],
         ];
 
         foreach ($metodes as $metode) {
@@ -274,13 +273,13 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        // 8. TRANSAKSI
+        // 8. TRANSAKSI CONTOH
         $transaksis = [
             [
                 'id_transaksi' => 1,
                 'id_pesanan' => 1,
                 'id_metode' => 1,
-                'tanggal_transaksi' => $waktu,
+                'tanggal_transaksi' => $waktuContoh,
                 'total_bayar' => 44000,
                 'bukti_pembayaran' => null,
                 'status_transaksi' => 'pending',
@@ -289,7 +288,7 @@ class DatabaseSeeder extends Seeder
                 'id_transaksi' => 2,
                 'id_pesanan' => 2,
                 'id_metode' => 2,
-                'tanggal_transaksi' => $waktu,
+                'tanggal_transaksi' => $waktuContoh,
                 'total_bayar' => 40000,
                 'bukti_pembayaran' => null,
                 'status_transaksi' => 'berhasil',
@@ -297,8 +296,8 @@ class DatabaseSeeder extends Seeder
             [
                 'id_transaksi' => 3,
                 'id_pesanan' => 3,
-                'id_metode' => 3,
-                'tanggal_transaksi' => $waktu,
+                'id_metode' => 2,
+                'tanggal_transaksi' => $waktuContoh,
                 'total_bayar' => 22000,
                 'bukti_pembayaran' => null,
                 'status_transaksi' => 'pending',
@@ -309,8 +308,8 @@ class DatabaseSeeder extends Seeder
             DB::table('transaksis')->updateOrInsert(
                 ['id_transaksi' => $transaksi['id_transaksi']],
                 array_merge($transaksi, [
-                    'created_at' => $waktu,
-                    'updated_at' => $waktu,
+                    'created_at' => $waktuContoh,
+                    'updated_at' => $waktuContoh,
                 ])
             );
         }

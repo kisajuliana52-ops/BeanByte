@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Middleware role
         $middleware->alias([
             'role' => \App\Http\Middleware\CekRole::class,
+            'api.role' => \App\Http\Middleware\EnsureApiRole::class,
         ]);
 
     })

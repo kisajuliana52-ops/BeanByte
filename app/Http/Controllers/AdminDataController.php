@@ -334,14 +334,29 @@ class AdminDataController extends Controller
             'status_transaksi' => 'required|in:pending,berhasil,dibatalkan',
         ]);
 
-        $ada = DB::table('transaksis')
-            ->where('id_transaksi', $id)
-            ->exists();
+        $transaksi = DB::table('transaksis as t')
+            ->join('pesanans as p', 'p.id_pesanan', '=', 't.id_pesanan')
+            ->where('t.id_transaksi', $id)
+            ->select('t.id_transaksi', 't.total_bayar', 'p.total_harga')
+            ->first();
 
-        if (!$ada) {
+        if (!$transaksi) {
             return response()->json([
                 'message' => 'Transaksi tidak ditemukan.'
             ], 404);
+        }
+
+        $totalBayar = number_format((float) $transaksi->total_bayar, 2, '.', '');
+        $totalTagihan = number_format((float) $transaksi->total_harga, 2, '.', '');
+
+        if (
+            $data['status_transaksi'] === 'berhasil' &&
+            $totalBayar !== $totalTagihan
+        ) {
+            return response()->json([
+                'message' => 'Pembayaran belum sesuai total tagihan.',
+                'total_tagihan' => $transaksi->total_harga,
+            ], 422);
         }
 
         DB::table('transaksis')
@@ -407,6 +422,17 @@ class AdminDataController extends Controller
             )
             ->orderBy('id_meja')
             ->get();
+
+        $key = (string) config('app.key');
+        $meja = $meja->map(static function ($item) use ($key) {
+            $item->order_token = hash_hmac(
+                'sha256',
+                'beanbyte-meja:' . $item->id_meja,
+                $key
+            );
+
+            return $item;
+        });
 
         return response()->json($meja);
     }

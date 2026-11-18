@@ -20,26 +20,18 @@ use App\Http\Controllers\AdminPenggunaController;
 |--------------------------------------------------------------------------
 */
 
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:5,1');
 
 
 /*
 |--------------------------------------------------------------------------
-| API UMUM
+| API PUBLIK PELANGGAN
 |--------------------------------------------------------------------------
 */
 
-// Kategori Menu
-Route::apiResource('kategori-menu', KategoriMenuController::class);
-
-// Menu
-Route::apiResource('menu', MenuController::class);
-
-// Meja
-Route::apiResource('meja', MejaController::class);
-
-// Pelanggan
-Route::apiResource('pelanggan', PelangganController::class);
+// Halaman pelanggan dan kasir hanya memerlukan daftar menu.
+Route::get('/menu', [MenuController::class, 'index']);
 
 
 /*
@@ -51,7 +43,31 @@ Route::apiResource('pelanggan', PelangganController::class);
 Route::post(
     '/pesanan-pelanggan',
     [PesananController::class, 'storeDariPelanggan']
-);
+)->middleware('throttle:10,1');
+
+
+/*
+|--------------------------------------------------------------------------
+| PENGELOLAAN DATA KHUSUS ADMIN
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:sanctum', 'api.role:admin'])->group(function () {
+
+    Route::apiResource('kategori-menu', KategoriMenuController::class);
+
+    // Endpoint index tetap publik; endpoint detail dan perubahan hanya untuk admin.
+    Route::apiResource('menu', MenuController::class)->except(['index']);
+
+    Route::apiResource('meja', MejaController::class);
+
+    // Data pelanggan memuat informasi pribadi, jadi semua endpoint perlu login admin.
+    Route::apiResource('pelanggan', PelangganController::class);
+
+    Route::apiResource('pengguna', AdminPenggunaController::class)
+        ->except(['show']);
+
+});
 
 
 /*
@@ -65,19 +81,52 @@ Route::middleware('auth:sanctum')->group(function () {
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Kelola Pengguna
-    Route::apiResource('pengguna', AdminPenggunaController::class);
+});
 
-    // Kelola Pesanan
-    Route::apiResource('pesanan', PesananController::class);
+// Pesanan bisa dilihat dan diperbarui oleh admin, pemilik, atau kasir.
+// Policy tetap membatasi operasi yang tidak diizinkan untuk role tertentu.
+Route::middleware(['auth:sanctum', 'api.role:admin,pemilik,kasir'])->group(function () {
 
-    // Detail Pesanan
-    Route::apiResource('detail-pesanan', DetailPesananController::class);
+    // Controller tidak memiliki method store; pesanan baru dibuat dari endpoint pelanggan.
+    Route::apiResource('pesanan', PesananController::class)->except(['store']);
 
-    // Transaksi
-    Route::apiResource('transaksi', TransaksiController::class);
+});
 
-    // Metode Pembayaran
-    Route::apiResource('metode-pembayaran', MetodePembayaranController::class);
+// Kasir boleh melihat rincian pesanan; perubahan stok dan subtotal khusus admin.
+Route::middleware(['auth:sanctum', 'api.role:admin,kasir'])->group(function () {
+
+    Route::apiResource('detail-pesanan', DetailPesananController::class)
+        ->only(['index', 'show']);
+
+});
+
+Route::middleware(['auth:sanctum', 'api.role:admin'])->group(function () {
+
+    Route::apiResource('detail-pesanan', DetailPesananController::class)
+        ->except(['index', 'show']);
+
+});
+
+// Kasir perlu membaca dan memproses transaksi; penghapusan tetap admin.
+Route::middleware(['auth:sanctum', 'api.role:admin,kasir'])->group(function () {
+
+    Route::get('/transaksi/{id}/bukti', [TransaksiController::class, 'downloadBukti'])
+        ->name('api.transaksi.bukti');
+
+    Route::apiResource('transaksi', TransaksiController::class)
+        ->only(['index', 'show', 'store', 'update']);
+
+    Route::apiResource('metode-pembayaran', MetodePembayaranController::class)
+        ->only(['index', 'show']);
+
+});
+
+Route::middleware(['auth:sanctum', 'api.role:admin'])->group(function () {
+
+    Route::apiResource('transaksi', TransaksiController::class)
+        ->only(['destroy']);
+
+    Route::apiResource('metode-pembayaran', MetodePembayaranController::class)
+        ->except(['index', 'show']);
 
 });

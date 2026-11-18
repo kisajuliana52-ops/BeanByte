@@ -272,6 +272,7 @@ let catatan = '';
 
 const parameterURL = new URLSearchParams(window.location.search);
 const mejaDariURL = parameterURL.get('meja');
+const tokenMejaDariURL = parameterURL.get('token') || '';
 
 let idMeja = null;
 let nomorMeja = null;
@@ -634,6 +635,7 @@ async function kirimPesanan() {
       body: JSON.stringify({
         nama_pelanggan: nama.trim(),
         id_meja: idMeja,
+        table_token: tokenMejaDariURL,
         items: items
       })
     });

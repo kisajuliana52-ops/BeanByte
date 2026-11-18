@@ -1,0 +1,9 @@
+kind: wasmer.io/App.v0
+name: coffe-shop-orderbeanbyte
+owner: kisajuliana52
+package: .
+app_id: da_nBBIbtXUD9o8
+
+capabilities:
+  database:
+    engine: mysql

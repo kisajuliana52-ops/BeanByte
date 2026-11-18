@@ -32,27 +32,37 @@ class PesananController extends Controller
         $data = $request->validate([
             'nama_pelanggan' => 'required|string|max:255',
             'id_meja' => 'required|integer|exists:mejas,id_meja',
-            'items' => 'required|array|min:1',
+            'table_token' => ['required', 'string', 'size:64', 'regex:/\A[a-f0-9]{64}\z/i'],
+            'items' => 'required|array|min:1|max:50',
             'items.*.id_menu' => 'required|integer|distinct|exists:menus,id_menu',
             'items.*.jumlah' => 'required|integer|min:1',
-            'items.*.catatan' => 'nullable|string',
+            'items.*.catatan' => 'nullable|string|max:500',
         ]);
+
+        $idMeja = (int) $data['id_meja'];
+        $tokenMejaDiharapkan = hash_hmac(
+            'sha256',
+            'beanbyte-meja:' . $idMeja,
+            (string) config('app.key')
+        );
+
+        if (!hash_equals($tokenMejaDiharapkan, strtolower($data['table_token']))) {
+            return response()->json([
+                'message' => 'QR meja tidak valid. Silakan scan ulang QR meja yang terdaftar.',
+            ], 403);
+        }
+
+        $data['id_meja'] = $idMeja;
 
         $pesanan = DB::transaction(function () use ($data) {
 
-            $pelanggan = Pelanggan::where(
-                'nama_pelanggan',
-                $data['nama_pelanggan']
-            )->first();
-
-            if (!$pelanggan) {
-                $pelanggan = Pelanggan::create([
-                    'nama_pelanggan' => $data['nama_pelanggan'],
-                    'no_hp' => '0000000000',
-                    'alamat' => null,
-                    'jenis_pelanggan' => 'non langganan',
-                ]);
-            }
+            // Nama dari form publik belum terverifikasi; jangan kaitkan ke pelanggan lama.
+            $pelanggan = Pelanggan::create([
+                'nama_pelanggan' => $data['nama_pelanggan'],
+                'no_hp' => '0000000000',
+                'alamat' => null,
+                'jenis_pelanggan' => 'non langganan',
+            ]);
 
             $meja = Meja::where(
                 'id_meja',

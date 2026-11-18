@@ -1010,7 +1010,7 @@ function pQr() {
     <div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--soft);color:var(--muted);font-size:.78rem;line-height:1.7">Masukkan URL tunnel Cloudflare yang sedang aktif, tanpa tambahan <b>/pelanggan</b>. Setelah URL disimpan, sistem membuat QR untuk setiap meja dari database dan membuka halaman pelanggan sesuai nomor meja.</div>
   </div>`;
   const cards = qrTables.map(m => {
-    const tujuan = `${qrTunnelUrl}/pelanggan?meja=${encodeURIComponent(m.id_meja)}`;
+    const tujuan = `${qrTunnelUrl}/pelanggan?meja=${encodeURIComponent(m.id_meja)}&token=${encodeURIComponent(m.order_token)}`;
     const gambar = `https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${encodeURIComponent(tujuan)}`;
     return `<div class="card qr-print-card" style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;padding:18px">
       <h3 style="margin:0;color:var(--brown)">${esc(m.nomor_meja || ('Meja '+m.id_meja))}</h3>

@@ -39,8 +39,15 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if (strtolower(trim((string) $user->status)) !== 'aktif') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun tidak aktif.',
+            ], 403);
+        }
+
         // Membatasi login hanya untuk pegawai
-        if (!in_array(strtolower($user->role), [
+        if (!in_array(strtolower(trim((string) $user->role)), [
             'admin',
             'pemilik',
             'kasir'
